@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<BaliProject version="3.2" title="uart_test" device="LFXP2-5E-6TN144C" default_implementation="uart_test">
+    <Options/>
+    <Implementation title="uart_test" dir="uart_test" description="uart_test" synthesis="synplify" default_strategy="Strategy1">
+        <Options def_top="uart_interface_tb"/>
+        <Source name="uart_interface.vhd" type="VHDL" type_short="VHDL">
+            <Options/>
+        </Source>
+        <Source name="testbench_uart_interface.vhd" type="VHDL" type_short="VHDL">
+            <Options top_module="uart_interface_tb"/>
+        </Source>
+        <Source name="uart_test.lpf" type="Logic Preference" type_short="LPF">
+            <Options/>
+        </Source>
+        <Source name="uart_test_simulation/uart_test_simulation.spf" type="Simulation Project File" type_short="SPF">
+            <Options/>
+        </Source>
+    </Implementation>
+    <Strategy name="Strategy1" file="uart_test1.sty"/>
+</BaliProject>
