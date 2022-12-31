@@ -83,9 +83,6 @@ begin
 				r_TX_UART_CLOCK_COUNTER <= 0;
 
 				if (r_TX_PACKET_PHASE = IDLE) then
-
-					report "test";
-
 					if (r_TX_FIFO_EMPTY = '0') then
 						r_TX_FIFO_READ_ENABLE <= '1';
 						r_TX_BYTE <= r_TX_FIFO_READ_DATA;
