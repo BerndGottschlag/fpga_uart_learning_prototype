@@ -20,18 +20,16 @@ architecture rtl of uart_interface is
 	constant c_UART_TX_CLOCK_COUNTER_MAX_VALUE: natural := 434; -- clk * duty_cycle/target_frequency = 100 MHz * 0.5/(115200 baud) = 434
 	constant c_NUMBER_OF_DATA_BITS: natural := 8;
 
-	signal r_UART_CLOCK_COUNTER: natural range 0 to c_UART_TX_CLOCK_COUNTER_MAX_VALUE;
-	signal r_DATA_BITS_COUNTER: natural range 0 to c_NUMBER_OF_DATA_BITS;
-	signal r_STOP_BITS_COUNTER: natural range 0 to c_NUMBER_OF_DATA_BITS;
-
 	type t_PACKET_PHASE is (IDLE, START_BIT, DATA_PHASE, STOP_BIT);
-	signal r_PACKET_PHASE : t_PACKET_PHASE := IDLE;
+
+	-- Tx process
+	signal r_TX_UART_CLOCK_COUNTER: natural range 0 to c_UART_TX_CLOCK_COUNTER_MAX_VALUE;
+	signal r_TX_DATA_BITS_COUNTER: natural range 0 to c_NUMBER_OF_DATA_BITS;
+	signal r_TX_STOP_BITS_COUNTER: natural range 0 to c_NUMBER_OF_DATA_BITS;
+
+	signal r_TX_PACKET_PHASE : t_PACKET_PHASE := IDLE;
 
 	signal r_TX_BYTE: std_logic_vector(c_NUMBER_OF_DATA_BITS-1 downto 0);
-
-
-	signal r_NEW_DATA_AVAILABLE: std_logic := '0';
-	signal r_TEMP_DATA: std_logic := '0';
 
 	signal r_TX_FIFO_READ_ENABLE: std_logic := '0';
 	signal r_TX_FIFO_READ_DATA: std_logic_vector(c_NUMBER_OF_DATA_BITS-1 downto 0);
@@ -77,14 +75,14 @@ begin
 	p_Send_Data: process (i_clock) is
 	begin
 		if (rising_edge(i_clock)) then
-			if (r_UART_CLOCK_COUNTER < c_UART_TX_CLOCK_COUNTER_MAX_VALUE) then
-				r_UART_CLOCK_COUNTER <= r_UART_CLOCK_COUNTER + 1;
+			if (r_TX_UART_CLOCK_COUNTER < c_UART_TX_CLOCK_COUNTER_MAX_VALUE) then
+				r_TX_UART_CLOCK_COUNTER <= r_TX_UART_CLOCK_COUNTER + 1;
 
 				r_TX_FIFO_READ_ENABLE <= '0';
 			else
-				r_UART_CLOCK_COUNTER <= 0;
+				r_TX_UART_CLOCK_COUNTER <= 0;
 
-				if (r_PACKET_PHASE = IDLE) then
+				if (r_TX_PACKET_PHASE = IDLE) then
 
 					report "test";
 
@@ -92,36 +90,40 @@ begin
 						r_TX_FIFO_READ_ENABLE <= '1';
 						r_TX_BYTE <= r_TX_FIFO_READ_DATA;
 
-						r_PACKET_PHASE <= START_BIT;
+						r_TX_PACKET_PHASE <= START_BIT;
 					end if;
-				elsif (r_PACKET_PHASE = START_BIT) then
+				elsif (r_TX_PACKET_PHASE = START_BIT) then
 
 					r_TX_FIFO_READ_ENABLE <= '0'; -- disable FIFO write to avoid popping further elements from the FIFO
 					-- send one start bit (tx line low)
 					o_uart_tx <= '0';
 
-					r_PACKET_PHASE <= DATA_PHASE;
-					r_DATA_BITS_COUNTER <= 0;
-				elsif (r_PACKET_PHASE = DATA_PHASE) then
+					r_TX_PACKET_PHASE <= DATA_PHASE;
+					r_TX_DATA_BITS_COUNTER <= 0;
+				elsif (r_TX_PACKET_PHASE = DATA_PHASE) then
 					-- clock out data bits
-					if (r_DATA_BITS_COUNTER < c_NUMBER_OF_DATA_BITS - 1) then
-						o_uart_tx <= r_TX_BYTE(r_DATA_BITS_COUNTER);
-						r_TEMP_DATA <= not r_TEMP_DATA;
-						r_DATA_BITS_COUNTER <= r_DATA_BITS_COUNTER + 1;
+					if (r_TX_DATA_BITS_COUNTER < c_NUMBER_OF_DATA_BITS - 1) then
+						o_uart_tx <= r_TX_BYTE(r_TX_DATA_BITS_COUNTER);
+						r_TX_DATA_BITS_COUNTER <= r_TX_DATA_BITS_COUNTER + 1;
 					else
-						o_uart_tx <= r_TX_BYTE(r_DATA_BITS_COUNTER);
-						r_TEMP_DATA <= not r_TEMP_DATA;
+						o_uart_tx <= r_TX_BYTE(r_TX_DATA_BITS_COUNTER);
 
-						r_DATA_BITS_COUNTER <= 0;
-						r_PACKET_PHASE <= STOP_BIT;
+						r_TX_DATA_BITS_COUNTER <= 0;
+						r_TX_PACKET_PHASE <= STOP_BIT;
 					end if;
-				elsif (r_PACKET_PHASE = STOP_BIT) then
+				elsif (r_TX_PACKET_PHASE = STOP_BIT) then
 					o_uart_tx <= '1';
-					r_PACKET_PHASE <= IDLE;
+					r_TX_PACKET_PHASE <= IDLE;
 				else
-					r_PACKET_PHASE <= IDLE;
+					r_TX_PACKET_PHASE <= IDLE;
 				end if;
 			end if;
 		end if;
 	end process p_Send_Data;
+
+	p_Receive_Data: process (i_clock) is
+	begin
+		if (rising_edge(i_clock)) then
+		end if;
+	end process p_Receive_Data;
 end rtl;
