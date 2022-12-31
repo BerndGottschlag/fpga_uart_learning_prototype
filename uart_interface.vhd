@@ -6,9 +6,13 @@ use ieee.numeric_std.all;
 entity uart_interface is
 	port (
 		i_clock: in std_logic; -- assumes 100 MHz
-		i_tx_byte: in std_logic_vector(7 downto 0);
-		i_data_available: in std_logic;
-		o_uart_tx: out std_logic
+		o_uart_tx: out std_logic;
+
+		-- Tx FIFO interface
+		i_tx_fifo_reset: in std_logic;
+		i_tx_fifo_write_enable: in std_logic;
+		i_tx_fifo_write_data: in std_logic_vector(8-1 downto 0);
+		o_tx_fifo_full: in std_logic
 	);
 end uart_interface;
 
@@ -23,25 +27,76 @@ architecture rtl of uart_interface is
 	type t_PACKET_PHASE is (IDLE, START_BIT, DATA_PHASE, STOP_BIT);
 	signal r_PACKET_PHASE : t_PACKET_PHASE := IDLE;
 
+	signal r_TX_BYTE: std_logic_vector(c_NUMBER_OF_DATA_BITS-1 downto 0);
 
-	signal r_TEMP_TEST_DATA: std_logic := '0';
+
+	signal r_NEW_DATA_AVAILABLE: std_logic := '0';
+	signal r_TEMP_DATA: std_logic := '0';
+
+	signal r_TX_FIFO_READ_ENABLE: std_logic := '0';
+	signal r_TX_FIFO_READ_DATA: std_logic_vector(c_NUMBER_OF_DATA_BITS-1 downto 0);
+	signal r_TX_FIFO_EMPTY: std_logic := '0';
+	signal r_TX_FIFO_FULL: std_logic := '0';
+
+
+	component fifo_module is
+		port (
+			i_clk : in std_logic;
+			i_reset_fifo : in std_logic;
+
+			-- FIFO write interface:
+			i_write_enable : in std_logic;
+			i_write_data : in std_logic_vector(c_NUMBER_OF_DATA_BITS-1 downto 0);
+			o_fifo_full : out std_logic;
+
+			-- FIFO read interface:
+			i_read_enable : in std_logic;
+			o_read_data : out std_logic_vector(c_NUMBER_OF_DATA_BITS-1 downto 0);
+			o_fifo_empty : out std_logic
+		);
+	end component fifo_module;
 begin
+	-- instantiate the Tx FIFO
+	TX_FIFO : fifo_module
+		port map (
+		i_clk => i_clock,
+		i_reset_fifo => i_tx_fifo_reset,
+
+		-- FIFO write interface:
+		i_write_enable => i_tx_fifo_write_enable,
+		i_write_data => i_tx_fifo_write_data,
+		o_fifo_full => r_TX_FIFO_FULL,
+
+		-- FIFO read interface:
+		i_read_enable => r_TX_FIFO_READ_ENABLE,
+		o_read_data => r_TX_FIFO_READ_DATA,
+		o_fifo_empty => r_TX_FIFO_EMPTY
+	);
+
+
 	p_Send_Data: process (i_clock) is
 	begin
 		if (rising_edge(i_clock)) then
 			if (r_UART_CLOCK_COUNTER < c_UART_TX_CLOCK_COUNTER_MAX_VALUE) then
 				r_UART_CLOCK_COUNTER <= r_UART_CLOCK_COUNTER + 1;
+
+				r_TX_FIFO_READ_ENABLE <= '0';
 			else
 				r_UART_CLOCK_COUNTER <= 0;
 
-				if (r_PACKET_PHASE = IDLE) then -- TODO: no idle phase needed between packets needed
+				if (r_PACKET_PHASE = IDLE) then
 
-					if (i_data_available = '1') then
-						o_uart_tx <= '1';
+					report "test";
+
+					if (r_TX_FIFO_EMPTY = '0') then
+						r_TX_FIFO_READ_ENABLE <= '1';
+						r_TX_BYTE <= r_TX_FIFO_READ_DATA;
 
 						r_PACKET_PHASE <= START_BIT;
 					end if;
 				elsif (r_PACKET_PHASE = START_BIT) then
+
+					r_TX_FIFO_READ_ENABLE <= '0'; -- disable FIFO write to avoid popping further elements from the FIFO
 					-- send one start bit (tx line low)
 					o_uart_tx <= '0';
 
@@ -50,12 +105,12 @@ begin
 				elsif (r_PACKET_PHASE = DATA_PHASE) then
 					-- clock out data bits
 					if (r_DATA_BITS_COUNTER < c_NUMBER_OF_DATA_BITS - 1) then
-						o_uart_tx <= i_tx_byte(r_DATA_BITS_COUNTER);
-						r_TEMP_TEST_DATA <= not r_TEMP_TEST_DATA;
+						o_uart_tx <= r_TX_BYTE(r_DATA_BITS_COUNTER);
+						r_TEMP_DATA <= not r_TEMP_DATA;
 						r_DATA_BITS_COUNTER <= r_DATA_BITS_COUNTER + 1;
 					else
-						o_uart_tx <= i_tx_byte(r_DATA_BITS_COUNTER);
-						r_TEMP_TEST_DATA <= not r_TEMP_TEST_DATA;
+						o_uart_tx <= r_TX_BYTE(r_DATA_BITS_COUNTER);
+						r_TEMP_DATA <= not r_TEMP_DATA;
 
 						r_DATA_BITS_COUNTER <= 0;
 						r_PACKET_PHASE <= STOP_BIT;
